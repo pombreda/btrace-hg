@@ -1,0 +1,10 @@
+(^|/)CVS($|/)
+(^|/)\.hg($|/)
+(^|/)\.hgtags($|/)
+(^|/)build($|/)
+(^|/)javadoc($|/)
+(^|/)private($|/)
+^project.log$
+^tailor.state$
+^tailor.state.old$
+^tailor.state.journal$
