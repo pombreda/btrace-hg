@@ -1,0 +1,12 @@
+(^|/)CVS($|/)
+(^|/)\.hg($|/)
+(^|/)\.hgtags($|/)
+(^|/)build($|/)
+(^|/)javadoc($|/)
+(^|/)private($|/)
+patches
+webrev*
+^project.log$
+^tailor.state$
+^tailor.state.old$
+^tailor.state.journal$
