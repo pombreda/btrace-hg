@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project basedir=".." name="BTrace-IDE">
+    <property name="ant.script" value="../make/build.xml"/>
+
+    <!-- TODO: edit the following target according to your needs -->
+    <!-- (more info: http://www.netbeans.org/kb/articles/freeform-config.html#compilesingle) -->
+    <target name="compile-selected-files-in-test">
+        <fail unless="files">Must set property 'files'</fail>
+        <echo>${files}</echo>
+        <apply executable="bin/btracec"  verbose="true">
+            <fileset dir="src/test" includes="${files}"/>
+            <arg value="-cp build/test"/>
+            <arg value="-d build/test"/>
+        </apply>
+    </target>
+</project>
