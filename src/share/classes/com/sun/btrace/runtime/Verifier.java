@@ -70,7 +70,7 @@ public class Verifier extends ClassAdapter {
     public static final String BTRACE_PROBECLASSNAME_DESC = Type.getDescriptor(ProbeClassName.class);
     public static final String BTRACE_PROBEMETHODNAME_DESC = Type.getDescriptor(ProbeMethodName.class);
 
-    private boolean seenBTrace;
+    private boolean seenBTrace, asBTrace;
     private String className;
     private List<OnMethod> onMethods;
     private List<OnProbe> onProbes;
@@ -125,18 +125,27 @@ public class Verifier extends ClassAdapter {
         if (desc.equals(BTRACE_DESC)) {
             seenBTrace = true;
         }
+        if (desc.startsWith("com.sun.btrace.annotations.")) {
+            // flag the current element as having a btrace annotation
+            asBTrace = true; //
+        }
         return super.visitAnnotation(desc, visible);
     }
 
     public FieldVisitor	visitField(int access, String name, 
             String desc, String signature, Object value) {
-        if (! seenBTrace) {
-            reportError("not.a.btrace.program");
+        try {
+            if (! seenBTrace) {
+                reportError("not.a.btrace.program");
+            }
+            if ((access & ACC_STATIC) == 0) {
+                reportError("no.instance.variables", name);
+            }
+            return super.visitField(access, name, desc, signature, value);
+        } finally {
+            // clean the flag for an element having a btrace annotation
+            asBTrace = false;
         }
-        if ((access & ACC_STATIC) == 0) {
-            reportError("no.instance.variables", name);
-        }
-        return super.visitField(access, name, desc, signature, value); 
     }
      
     public void visitInnerClass(String name, String outerName, 
@@ -149,174 +158,181 @@ public class Verifier extends ClassAdapter {
      
     public MethodVisitor visitMethod(int access, final String methodName, 
             final String methodDesc, String signature, String[] exceptions) {
-        if (! seenBTrace) {
-            reportError("not.a.btrace.program");
-        }
-        
-        if ((access & ACC_PUBLIC) == 0 && !methodName.equals(CLASS_INITIALIZER)) {
-            reportError("method.should.be.public", methodName + methodDesc);
-        }
-
-        if ((access & ACC_SYNCHRONIZED) != 0) {
-            reportError("no.synchronized.methods", methodName + methodDesc);
-        }
-
-        if (! methodName.equals(CONSTRUCTOR)) {
-            if ((access & ACC_STATIC) == 0) {
-                reportError("no.instance.method", methodName + methodDesc);
-            }
-        }
-
-        if (Type.getReturnType(methodDesc) != Type.VOID_TYPE) {
-            reportError("return.type.should.be.void", methodName + methodDesc);
-        }
-
-        MethodVisitor mv = super.visitMethod(access, methodName, 
-                   methodDesc, signature, exceptions);
-        return new MethodVerifier(this, mv, className) {
-            private OnMethod om = null;
-
-            @Override
-            public AnnotationVisitor visitParameterAnnotation(int parameter, String desc, boolean visible) {
-                if (desc.equals(BTRACE_SELF_DESC)) {
-                    // all allowed
-                    if (om != null) {
-                        om.setSelfParameter(parameter);
-                    }
-                }
-                if (desc.equals(BTRACE_RETURN_DESC)) {
-                    if (om != null) {
-                        if (om.getLocation().getValue() == Kind.RETURN || 
-                            (om.getLocation().getValue() == Kind.CALL && om.getLocation().getWhere() == Where.AFTER) ||
-                            (om.getLocation().getValue() == Kind.ARRAY_GET && om.getLocation().getWhere() == Where.AFTER) ||
-                            (om.getLocation().getValue() == Kind.FIELD_GET && om.getLocation().getWhere() == Where.AFTER) ||
-                            (om.getLocation().getValue() == Kind.NEW && om.getLocation().getWhere() == Where.AFTER) ||
-                            (om.getLocation().getValue() == Kind.NEWARRAY && om.getLocation().getWhere() == Where.AFTER)) {
-                            om.setReturnParameter(parameter);
-                        } else {
-                            reportError("return.desc.invalid", methodName + methodDesc + "(" + parameter + ")");
-                        }
-                    }
-                }
-                if (desc.equals(BTRACE_TARGETMETHOD_DESC)) {
-                    if (om != null) {
-                        if (om.getLocation().getValue() == Kind.CALL ||
-                            om.getLocation().getValue() == Kind.FIELD_GET ||
-                            om.getLocation().getValue() == Kind.FIELD_SET) {
-                            om.setTargetMethodOrFieldParameter(parameter);
-                        } else {
-                            reportError("called-method.desc.invalid", methodName + methodDesc + "(" + parameter + ")");
-                        }
-                    }
-                }
-                if (desc.equals(BTRACE_TARGETINSTANCE_DESC)) {
-                    if (om != null) {
-                        if (om.getLocation().getValue() == Kind.CALL ||
-                            om.getLocation().getValue() == Kind.FIELD_GET ||
-                            om.getLocation().getValue() == Kind.FIELD_SET) {
-                            om.setTargetInstanceParameter(parameter);
-                        } else {
-                            reportError("called-instance.desc.invalid", methodName + methodDesc + "(" + parameter + ")");
-                        }
-                    }
-                }
-                if (desc.equals(BTRACE_DURATION_DESC)) {
-                    if (om != null) {
-                        if (om.getLocation().getValue() == Kind.RETURN || om.getLocation().getValue() == Kind.ERROR) {
-                            om.setDurationParameter(parameter);
-                        } else {
-                            reportError("duration.desc.invalid", methodName + methodDesc + "(" + parameter + ")");
-                        }
-                    }
-                }
-                if (desc.equals(BTRACE_PROBECLASSNAME_DESC)) {
-                    // allowed for all
-                    if (om != null) {
-                        om.setClassNameParameter(parameter);
-                    }
-                }
-                if (desc.equals(BTRACE_PROBEMETHODNAME_DESC)) {
-                    // allowed for all
-                    if (om != null) {
-                        om.setMethodParameter(parameter);
-                    }
-                }
-                return super.visitParameterAnnotation(parameter, desc, visible);
+        try {
+            if (! seenBTrace) {
+                reportError("not.a.btrace.program");
             }
 
-            public AnnotationVisitor visitAnnotation(String desc,
-                                  boolean visible) {      
-                if (desc.equals(ONMETHOD_DESC)) {
-                    om = new OnMethod();
-                    onMethods.add(om);
-                    om.setTargetName(methodName);
-                    om.setTargetDescriptor(methodDesc);
-                    return new NullVisitor() {
-                        public void	visit(String name, Object value) {
-                            if (name.equals("clazz")) {
-                                om.setClazz((String)value);
-                            } else if (name.equals("method")) {
-                                om.setMethod((String)value);
-                            } else if (name.equals("type")) {
-                                om.setType((String)value);
+            if ((access & ACC_PUBLIC) == 0 && !methodName.equals(CLASS_INITIALIZER)) {
+                if (asBTrace) { // only btrace handlers are enforced to be public
+                    reportError("method.should.be.public", methodName + methodDesc);
+                }
+            }
+
+            if ((access & ACC_SYNCHRONIZED) != 0) {
+                reportError("no.synchronized.methods", methodName + methodDesc);
+            }
+
+            if (! methodName.equals(CONSTRUCTOR)) {
+                if ((access & ACC_STATIC) == 0) {
+                    reportError("no.instance.method", methodName + methodDesc);
+                }
+            }
+
+            if (Type.getReturnType(methodDesc) != Type.VOID_TYPE) {
+                reportError("return.type.should.be.void", methodName + methodDesc);
+            }
+
+            MethodVisitor mv = super.visitMethod(access, methodName,
+                       methodDesc, signature, exceptions);
+            return new MethodVerifier(this, mv, className) {
+                private OnMethod om = null;
+
+                @Override
+                public AnnotationVisitor visitParameterAnnotation(int parameter, String desc, boolean visible) {
+                    if (desc.equals(BTRACE_SELF_DESC)) {
+                        // all allowed
+                        if (om != null) {
+                            om.setSelfParameter(parameter);
+                        }
+                    }
+                    if (desc.equals(BTRACE_RETURN_DESC)) {
+                        if (om != null) {
+                            if (om.getLocation().getValue() == Kind.RETURN ||
+                                (om.getLocation().getValue() == Kind.CALL && om.getLocation().getWhere() == Where.AFTER) ||
+                                (om.getLocation().getValue() == Kind.ARRAY_GET && om.getLocation().getWhere() == Where.AFTER) ||
+                                (om.getLocation().getValue() == Kind.FIELD_GET && om.getLocation().getWhere() == Where.AFTER) ||
+                                (om.getLocation().getValue() == Kind.NEW && om.getLocation().getWhere() == Where.AFTER) ||
+                                (om.getLocation().getValue() == Kind.NEWARRAY && om.getLocation().getWhere() == Where.AFTER)) {
+                                om.setReturnParameter(parameter);
+                            } else {
+                                reportError("return.desc.invalid", methodName + methodDesc + "(" + parameter + ")");
                             }
                         }
+                    }
+                    if (desc.equals(BTRACE_TARGETMETHOD_DESC)) {
+                        if (om != null) {
+                            if (om.getLocation().getValue() == Kind.CALL ||
+                                om.getLocation().getValue() == Kind.FIELD_GET ||
+                                om.getLocation().getValue() == Kind.FIELD_SET) {
+                                om.setTargetMethodOrFieldParameter(parameter);
+                            } else {
+                                reportError("called-method.desc.invalid", methodName + methodDesc + "(" + parameter + ")");
+                            }
+                        }
+                    }
+                    if (desc.equals(BTRACE_TARGETINSTANCE_DESC)) {
+                        if (om != null) {
+                            if (om.getLocation().getValue() == Kind.CALL ||
+                                om.getLocation().getValue() == Kind.FIELD_GET ||
+                                om.getLocation().getValue() == Kind.FIELD_SET) {
+                                om.setTargetInstanceParameter(parameter);
+                            } else {
+                                reportError("called-instance.desc.invalid", methodName + methodDesc + "(" + parameter + ")");
+                            }
+                        }
+                    }
+                    if (desc.equals(BTRACE_DURATION_DESC)) {
+                        if (om != null) {
+                            if (om.getLocation().getValue() == Kind.RETURN || om.getLocation().getValue() == Kind.ERROR) {
+                                om.setDurationParameter(parameter);
+                            } else {
+                                reportError("duration.desc.invalid", methodName + methodDesc + "(" + parameter + ")");
+                            }
+                        }
+                    }
+                    if (desc.equals(BTRACE_PROBECLASSNAME_DESC)) {
+                        // allowed for all
+                        if (om != null) {
+                            om.setClassNameParameter(parameter);
+                        }
+                    }
+                    if (desc.equals(BTRACE_PROBEMETHODNAME_DESC)) {
+                        // allowed for all
+                        if (om != null) {
+                            om.setMethodParameter(parameter);
+                        }
+                    }
+                    return super.visitParameterAnnotation(parameter, desc, visible);
+                }
 
-                        public AnnotationVisitor visitAnnotation(String name,
-                                  String desc) {
-                            if (desc.equals(LOCATION_DESC)) {
-                                final Location loc = new Location();
-                                return new NullVisitor() {
-                                    public void visitEnum(String name, String desc, String value) {
-                                        if (desc.equals(WHERE_DESC)) {
-                                            loc.setWhere(Enum.valueOf(Where.class, value));
-                                        } else if (desc.equals(KIND_DESC)) {
-                                            loc.setValue(Enum.valueOf(Kind.class, value));
+                public AnnotationVisitor visitAnnotation(String desc,
+                                      boolean visible) {
+                    if (desc.equals(ONMETHOD_DESC)) {
+                        om = new OnMethod();
+                        onMethods.add(om);
+                        om.setTargetName(methodName);
+                        om.setTargetDescriptor(methodDesc);
+                        return new NullVisitor() {
+                            public void	visit(String name, Object value) {
+                                if (name.equals("clazz")) {
+                                    om.setClazz((String)value);
+                                } else if (name.equals("method")) {
+                                    om.setMethod((String)value);
+                                } else if (name.equals("type")) {
+                                    om.setType((String)value);
+                                }
+                            }
+
+                            public AnnotationVisitor visitAnnotation(String name,
+                                      String desc) {
+                                if (desc.equals(LOCATION_DESC)) {
+                                    final Location loc = new Location();
+                                    return new NullVisitor() {
+                                        public void visitEnum(String name, String desc, String value) {
+                                            if (desc.equals(WHERE_DESC)) {
+                                                loc.setWhere(Enum.valueOf(Where.class, value));
+                                            } else if (desc.equals(KIND_DESC)) {
+                                                loc.setValue(Enum.valueOf(Kind.class, value));
+                                            }
                                         }
-                                    }
 
-                                    public void	visit(String name, Object value) {
-                                        if (name.equals("clazz")) {
-                                            loc.setClazz((String)value);
-                                        } else if (name.equals("method")) {
-                                            loc.setMethod((String)value);
-                                        } else if (name.equals("type")) {
-                                            loc.setType((String)value);
-                                        } else if (name.equals("field")) {
-                                            loc.setField((String)value);
-                                        } else if (name.equals("line")) {
-                                            loc.setLine(((Number)value).intValue());
+                                        public void	visit(String name, Object value) {
+                                            if (name.equals("clazz")) {
+                                                loc.setClazz((String)value);
+                                            } else if (name.equals("method")) {
+                                                loc.setMethod((String)value);
+                                            } else if (name.equals("type")) {
+                                                loc.setType((String)value);
+                                            } else if (name.equals("field")) {
+                                                loc.setField((String)value);
+                                            } else if (name.equals("line")) {
+                                                loc.setLine(((Number)value).intValue());
+                                            }
                                         }
-                                    }
 
-                                    public void visitEnd() {                                        
-                                        om.setLocation(loc);
-                                    }
-                                };
-                            }
+                                        public void visitEnd() {
+                                            om.setLocation(loc);
+                                        }
+                                    };
+                                }
 
-                            return super.visitAnnotation(name, desc);
-                        }
-                    };
-                } else if (desc.equals(ONPROBE_DESC)) {
-                    final OnProbe op = new OnProbe();
-                    onProbes.add(op);
-                    op.setTargetName(methodName);
-                    op.setTargetDescriptor(methodDesc);
-                    return new NullVisitor() {
-                        public void	visit(String name, Object value) {
-                            if (name.equals("namespace")) {
-                                op.setNamespace((String)value);
-                            } else if (name.equals("name")) {
-                                op.setName((String)value);
+                                return super.visitAnnotation(name, desc);
                             }
-                        }
-                    };
-                } else {
-                    return new NullVisitor();
+                        };
+                    } else if (desc.equals(ONPROBE_DESC)) {
+                        final OnProbe op = new OnProbe();
+                        onProbes.add(op);
+                        op.setTargetName(methodName);
+                        op.setTargetDescriptor(methodDesc);
+                        return new NullVisitor() {
+                            public void	visit(String name, Object value) {
+                                if (name.equals("namespace")) {
+                                    op.setNamespace((String)value);
+                                } else if (name.equals("name")) {
+                                    op.setName((String)value);
+                                }
+                            }
+                        };
+                    } else {
+                        return new NullVisitor();
+                    }
                 }
-            }
-        };
+            };
+        } finally {
+            // clean the flag for an element having a btrace annotation
+            asBTrace = false;
+        }
     }
  
     public void visitOuterClass(String owner, String name, 
