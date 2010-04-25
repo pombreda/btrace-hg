@@ -66,7 +66,13 @@ public final class BTraceUtils {
     private static final int STACK_DEC = 2;
     // do not allow object creation!
     private BTraceUtils() {}
-    
+
+    public static class Strings {
+        public static String str(Object o) {
+            return o.toString();
+        }
+    }
+
     // Thread and stack access
 
     /**
