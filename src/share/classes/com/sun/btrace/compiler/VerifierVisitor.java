@@ -37,6 +37,7 @@ import com.sun.source.util.TreeScanner;
 import com.sun.btrace.BTraceUtils;
 import com.sun.btrace.annotations.BTrace;
 import com.sun.btrace.util.Messages;
+import com.sun.source.util.TreePath;
 import com.sun.tools.javac.tree.JCTree;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -238,13 +239,8 @@ public class VerifierVisitor extends TreeScanner<Boolean, Void> {
                         }
                     } else {
                         // force the "public" modifier only on the annotated methods
-                        ModifiersTree mt = node.getModifiers();
-                        List<? extends AnnotationTree> annos = mt.getAnnotations();
-                        for(AnnotationTree at : annos) {
-                            String annFqn = ((JCTree)at.getAnnotationType()).type.tsym.getQualifiedName().toString();
-                            if (annFqn.startsWith("com.sun.btrace.annotations")) {
-                                return reportError("method.should.be.public", node);
-                            }
+                        if (isAnnotated(node)) {
+                            return reportError("method.should.be.public", node);
                         }
                         return super.visitMethod(node, v);
                     }
@@ -268,10 +264,20 @@ public class VerifierVisitor extends TreeScanner<Boolean, Void> {
 
     public Boolean visitReturn(ReturnTree node, Void v) {
         if (node.getExpression() != null) {
-            return reportError("return.type.should.be.void", node);
-        } else {
-            return super.visitReturn(node, v);
+            TreePath tp = verifier.getTreeUtils().getPath(verifier.getCompilationUnit(), node);
+            while (tp != null) {
+                tp = tp.getParentPath();
+                Tree leaf = tp.getLeaf();
+                if (leaf.getKind() == Tree.Kind.METHOD) {
+                    if (isAnnotated((MethodTree)leaf)) {
+                        return reportError("return.type.should.be.void", node);
+                    } else {
+                        return super.visitReturn(node, v);
+                    }
+                }
+            }
         }
+        return super.visitReturn(node, v);
     }
 
     public Boolean visitMemberSelect(MemberSelectTree node, Void v) {
@@ -323,6 +329,18 @@ public class VerifierVisitor extends TreeScanner<Boolean, Void> {
     private boolean isPublic(Set<Modifier> modifiers) {
         for (Modifier m : modifiers) {
             if (m == Modifier.PUBLIC) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isAnnotated(MethodTree node) {
+        ModifiersTree mt = node.getModifiers();
+        List<? extends AnnotationTree> annos = mt.getAnnotations();
+        for(AnnotationTree at : annos) {
+            String annFqn = ((JCTree)at.getAnnotationType()).type.tsym.getQualifiedName().toString();
+            if (annFqn.startsWith("com.sun.btrace.annotations")) {
                 return true;
             }
         }
