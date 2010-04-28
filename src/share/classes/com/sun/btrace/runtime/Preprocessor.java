@@ -507,15 +507,19 @@ public class Preprocessor extends ClassAdapter {
              *        }
              *
              */
-            // force the method to be public
-            if ((access & Opcodes.ACC_PRIVATE) > 0) access -= Opcodes.ACC_PRIVATE;
-            if ((access & Opcodes.ACC_PROTECTED) > 0) access -= Opcodes.ACC_PROTECTED;
-            access |= Opcodes.ACC_PUBLIC;
+            final boolean isClassInitializer = name.equals(CLASS_INITIALIZER);
+            classInitializerFound = isClassInitializer;
+            
+            if (!isClassInitializer) {
+                // force the method to be public
+                if ((access & Opcodes.ACC_PRIVATE) > 0) access -= Opcodes.ACC_PRIVATE;
+                if ((access & Opcodes.ACC_PROTECTED) > 0) access -= Opcodes.ACC_PROTECTED;
+                access += Opcodes.ACC_PUBLIC;
+            }
             
             MethodVisitor adaptee = super.visitMethod(access, name, desc, 
                                                     signature, exceptions);
-            final boolean isClassInitializer = name.equals(CLASS_INITIALIZER);
-            classInitializerFound = isClassInitializer;
+            
             return new MethodInstrumentor(adaptee, access, name, desc) {
                 private boolean isBTraceHandler = false;
                 private Label start = new Label();
@@ -659,7 +663,7 @@ public class Preprocessor extends ClassAdapter {
 
 
                 public void visitCode() {
-                    if (isBTraceHandler) {
+                    if (isClassInitializer || isBTraceHandler) {
                         visitTryCatchBlock(start, handler, handler,
                                         JAVA_LANG_THROWABLE);
 
@@ -767,13 +771,13 @@ public class Preprocessor extends ClassAdapter {
                 }
 
                 public void visitMaxs(int maxStack, int maxLocals) {
+                    visitLabel(handler);
                     if (isBTraceHandler) {
-                        visitLabel(handler);
                         visitMethodInsn(INVOKESTATIC, BTRACE_RUNTIME,
                                         BTRACE_RUNTIME_HANDLE_EXCEPTION,
                                         BTRACE_RUNTIME_HANDLE_EXCEPTION_DESC);
-                        super.visitInsn(RETURN);
                     }
+                    super.visitInsn(RETURN);
                     super.visitMaxs(maxStack, maxLocals);
                 }
             };

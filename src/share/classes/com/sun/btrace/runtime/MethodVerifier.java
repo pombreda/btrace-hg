@@ -24,6 +24,7 @@
  */
 package com.sun.btrace.runtime;
 
+import com.sun.btrace.org.objectweb.asm.AnnotationVisitor;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -71,12 +72,16 @@ public class MethodVerifier extends MethodAdapter {
 
     private Verifier verifier;
     private String className;
+    private String enclosingMethodName;
+    private CycleDetector graph;
     private Map<Label, Label> labels;
 
-    public MethodVerifier(Verifier v, MethodVisitor mv, String className) {
+    public MethodVerifier(Verifier v, MethodVisitor mv, String className, CycleDetector graph, String methodName) {
         super(mv);
         this.verifier = v;
         this.className = className;
+        this.enclosingMethodName = methodName;
+        this.graph = graph;
         labels = new HashMap<Label, Label>();
     }
 
@@ -170,7 +175,6 @@ public class MethodVerifier extends MethodAdapter {
                 }
                 break;
             case INVOKESTATIC:
-                System.err.println("*** " + owner);
                 if (!owner.equals(BTRACE_UTILS) && 
                     !owner.startsWith(BTRACE_UTILS + "$") &&
                     !owner.equals(className)) {
@@ -182,6 +186,7 @@ public class MethodVerifier extends MethodAdapter {
                         reportError("no.method.calls", owner + "." + name + desc);
                     }
                 }
+                graph.addEdge(enclosingMethodName, name + desc);
                 break;
         }
         super.visitMethodInsn(opcode, owner, name, desc);
