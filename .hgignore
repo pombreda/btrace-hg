@@ -1,0 +1,17 @@
+(^|/)CVS($|/)
+(^|/)\.hg($|/)
+(^|/)\.hgtags($|/)
+(^|/)build($|/)
+(^|/)release($|/)
+(^|/)javadoc($|/)
+(^|/)dist($|/)
+(^|/)private($|/)
+(^|/)output($|/)
+patches
+webrev*
+website
+^project.log$
+^tailor.state$
+^tailor.state.old$
+^tailor.state.journal$
+^TEST-*.xml$
