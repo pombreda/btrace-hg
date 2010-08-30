@@ -78,9 +78,7 @@ public class TimeStampGenerator extends MethodAdapter {
 
     @Override
     public void visitFieldInsn(int opcode, String owner, String name, String desc) {
-        if (!generatingIndex) {
-            check();
-        }
+        check();
         super.visitFieldInsn(opcode, owner, name, desc);
     }
 
@@ -235,6 +233,11 @@ public class TimeStampGenerator extends MethodAdapter {
             generatingIndex = true;
             TimeStampHelper.generateTimeStampAccess(this, className);
             ts_index[index] = lvs.newLocal(Type.LONG_TYPE);
+//            if (index == 0) {
+//                lvs.freeze(ts_index[0]);
+//            } else {
+//                lvs.unfreeze(ts_index[0]);
+//            }
         } finally {
             generatingIndex = false;
         }

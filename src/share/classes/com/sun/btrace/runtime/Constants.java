@@ -32,8 +32,8 @@ import com.sun.btrace.annotations.Location;
 import com.sun.btrace.annotations.OnMethod;
 import com.sun.btrace.annotations.OnProbe;
 import com.sun.btrace.annotations.Where;
-import com.sun.btrace.AnyType;
 import com.sun.btrace.BTraceUtils;
+import com.sun.btrace.AnyType;
 import com.sun.btrace.org.objectweb.asm.Type;
 
 /**

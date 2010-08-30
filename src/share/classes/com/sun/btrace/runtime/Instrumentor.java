@@ -47,8 +47,8 @@ import com.sun.btrace.org.objectweb.asm.Type;
 import com.sun.btrace.util.LocalVariablesSorter;
 import com.sun.btrace.util.TimeStampGenerator;
 import com.sun.btrace.util.TimeStampHelper;
-import java.util.regex.PatternSyntaxException;
 import static com.sun.btrace.runtime.Constants.*;
+import java.util.regex.PatternSyntaxException;
 
 /**
  * This instruments a probed class with BTrace probe
@@ -87,10 +87,6 @@ public class Instrumentor extends ClassAdapter {
         this(clazz, btraceClassName, new ClassReader(btraceCode), onMethods, cv);
     }
 
-    final public boolean hasMatch() {
-        return !calledOnMethods.isEmpty();
-    }
-
     public void visit(int version, int access, String name, 
         String signature, String superName, String[] interfaces) {
         usesTimeStamp = false;
@@ -115,7 +111,7 @@ public class Instrumentor extends ClassAdapter {
                     }
                 } catch (PatternSyntaxException pse) {
                     reportPatternSyntaxException(probeClazz);
-                }
+                 }
             } else if (firstChar == '+') {
                 // super type being matched.
                 String superType = probeClazz.substring(1);
@@ -158,7 +154,7 @@ public class Instrumentor extends ClassAdapter {
                         }
                     } catch (PatternSyntaxException pse) {
                         reportPatternSyntaxException(probeClazz);
-                    }
+                     }
                 } else if (probeClazz.equals(extName)) { 
                     applicableOnMethods.add(om);
                 }
@@ -212,7 +208,7 @@ public class Instrumentor extends ClassAdapter {
                         }
                     } catch (PatternSyntaxException pse) {
                         reportPatternSyntaxException(name);
-                    }
+                     }
                 }
 //                lvs[0] = new LocalVariablesSorter(access, desc, methodVisitor, externalState);
             }
@@ -289,7 +285,7 @@ public class Instrumentor extends ClassAdapter {
                                         new LocalVarArgProvider(vr.getArgIdx(INDEX_PTR), Type.INT_TYPE, argsIndex[INDEX_PTR]),
                                         new LocalVarArgProvider(vr.getArgIdx(INSTANCE_PTR), arrtype, argsIndex[INSTANCE_PTR]),
                                         new ConstantArgProvider(om.getClassNameParameter(), className.replace("/", ".")),
-                                        new ConstantArgProvider(om.getMethodParameter(), getName(om.isMethodFqn())),
+                                        new ConstantArgProvider(om.getMethodParameter(), getName()),
                                         new LocalVarArgProvider(om.getSelfParameter(), Type.getObjectType(className), 0));
 
                                     invokeBTraceAction(this, om);
@@ -321,7 +317,7 @@ public class Instrumentor extends ClassAdapter {
                                         new LocalVarArgProvider(vr.getArgIdx(INDEX_PTR), Type.INT_TYPE, argsIndex[INDEX_PTR]),
                                         new LocalVarArgProvider(vr.getArgIdx(INSTANCE_PTR), arrtype, argsIndex[INSTANCE_PTR]),
                                         new ConstantArgProvider(om.getClassNameParameter(), className.replace("/", ".")),
-                                        new ConstantArgProvider(om.getMethodParameter(), getName(om.isMethodFqn())),
+                                        new ConstantArgProvider(om.getMethodParameter(), getName()),
                                         new LocalVarArgProvider(om.getReturnParameter(), retType, retValIndex),
                                         new LocalVarArgProvider(om.getSelfParameter(), Type.getObjectType(className), 0));
                                     invokeBTraceAction(this, om);
@@ -363,7 +359,7 @@ public class Instrumentor extends ClassAdapter {
                                         new LocalVarArgProvider(vr.getArgIdx(INDEX_PTR), Type.INT_TYPE, argsIndex[INDEX_PTR]),
                                         new LocalVarArgProvider(vr.getArgIdx(VALUE_PTR), elementType, argsIndex[VALUE_PTR]),
                                         new ConstantArgProvider(om.getClassNameParameter(), className.replace("/", ".")),
-                                        new ConstantArgProvider(om.getMethodParameter(), getName(om.isMethodFqn())),
+                                        new ConstantArgProvider(om.getMethodParameter(), getName()),
                                         new LocalVarArgProvider(om.getSelfParameter(), Type.getObjectType(className), 0));
 
                                     invokeBTraceAction(this, om);
@@ -390,7 +386,7 @@ public class Instrumentor extends ClassAdapter {
                                         new LocalVarArgProvider(vr.getArgIdx(INDEX_PTR), Type.INT_TYPE, argsIndex[INDEX_PTR]),
                                         new LocalVarArgProvider(vr.getArgIdx(VALUE_PTR), elementType, argsIndex[VALUE_PTR]),
                                         new ConstantArgProvider(om.getClassNameParameter(), className.replace("/", ".")),
-                                        new ConstantArgProvider(om.getMethodParameter(), getName(om.isMethodFqn())),
+                                        new ConstantArgProvider(om.getMethodParameter(), getName()),
                                         new LocalVarArgProvider(om.getSelfParameter(), Type.getObjectType(className), 0));
 
                                     invokeBTraceAction(this, om);
@@ -427,7 +423,7 @@ public class Instrumentor extends ClassAdapter {
                         actionArgs[actionArgTypes.length + 1] = new LocalVarArgProvider(om.getTargetInstanceParameter(), TypeUtils.objectType, backupArgsIndexes[0]);
                         actionArgs[actionArgTypes.length + 2] = new ConstantArgProvider(om.getTargetMethodOrFieldParameter(), method);
                         actionArgs[actionArgTypes.length + 3] = new ConstantArgProvider(om.getClassNameParameter(), className);
-                        actionArgs[actionArgTypes.length + 4] = new ConstantArgProvider(om.getMethodParameter(), getName(om.isMethodFqn()));
+                        actionArgs[actionArgTypes.length + 4] = new ConstantArgProvider(om.getMethodParameter(), getName());
                         actionArgs[actionArgTypes.length + 5] = new LocalVarArgProvider(om.getSelfParameter(), Type.getObjectType(className), 0);
 
                         loadArguments(actionArgs);
@@ -444,7 +440,7 @@ public class Instrumentor extends ClassAdapter {
                                 && matches(localMethodName, name)
                                 && typeMatches(loc.getType(), desc)) {
 
-                            String method = (om.isTargetMethodOrFieldFqn() ? (owner + ".") : "") + name + (om.isTargetMethodOrFieldFqn() ? desc : "");
+                            String method = name + desc;
                             Type[] calledMethodArgs = Type.getArgumentTypes(desc);
                             addExtraTypeInfo(om.getSelfParameter(), Type.getObjectType(className));
                             if (where == Where.AFTER) {
@@ -537,7 +533,7 @@ public class Instrumentor extends ClassAdapter {
                                 loadArguments(
                                     new LocalVarArgProvider(vr.getArgIdx(0), exctype, index),
                                     new ConstantArgProvider(om.getClassNameParameter(), className),
-                                    new ConstantArgProvider(om.getMethodParameter(), getName(om.isMethodFqn())),
+                                    new ConstantArgProvider(om.getMethodParameter(), getName()),
                                     new LocalVarArgProvider(om.getSelfParameter(), Type.getObjectType(className), 0));
 
                                 invokeBTraceAction(this, om);
@@ -570,7 +566,7 @@ public class Instrumentor extends ClassAdapter {
                                     loadArguments(
                                         new LocalVarArgProvider(vr.getArgIdx(0), castType, castTypeIndex),
                                         new ConstantArgProvider(om.getClassNameParameter(), className.replace("/", ".")),
-                                        new ConstantArgProvider(om.getMethodParameter(), getName(om.isMethodFqn())),
+                                        new ConstantArgProvider(om.getMethodParameter(), getName()),
                                         new LocalVarArgProvider(om.getSelfParameter(), Type.getObjectType(className), 0));
 
                                     invokeBTraceAction(this, om);
@@ -615,7 +611,7 @@ public class Instrumentor extends ClassAdapter {
                                     ptr += actionArgTypes[index].getSize();
                                 }
                             }
-                            actionArgs[actionArgTypes.length] = new ConstantArgProvider(om.getMethodParameter(), getName(om.isMethodFqn()));
+                            actionArgs[actionArgTypes.length] = new ConstantArgProvider(om.getMethodParameter(), getName());
                             actionArgs[actionArgTypes.length + 1] = new ConstantArgProvider(om.getClassNameParameter(), className.replace("/", "."));
                             actionArgs[actionArgTypes.length + 2] = new LocalVarArgProvider(om.getSelfParameter(), Type.getObjectType(className), 0);
                             loadArguments(actionArgs);
@@ -667,7 +663,7 @@ public class Instrumentor extends ClassAdapter {
 
                                 loadArguments(new LocalVarArgProvider(vr.getArgIdx(0), TypeUtils.throwableType, throwableIndex),
                                     new ConstantArgProvider(om.getClassNameParameter(), className.replace("/", ".")),
-                                    new ConstantArgProvider(om.getMethodParameter(), getName(om.isMethodFqn())),
+                                    new ConstantArgProvider(om.getMethodParameter(), getName()),
                                     new LocalVarArgProvider(om.getSelfParameter(), Type.getObjectType(className), 0));
 
                                 invokeBTraceAction(this, om);
@@ -684,7 +680,7 @@ public class Instrumentor extends ClassAdapter {
 
                     int calledInstanceIndex = -1;
                     private String targetClassName = loc.getClazz();
-                    private String targetFieldName = (om.isTargetMethodOrFieldFqn() ? targetClassName + "." : "") + loc.getField();
+                    private String targetFieldName = loc.getField();
 
                     @Override
                     protected void onBeforeGetField(int opcode, String owner,
@@ -713,7 +709,7 @@ public class Instrumentor extends ClassAdapter {
                                             new LocalVarArgProvider(om.getTargetInstanceParameter(), TypeUtils.objectType, calledInstanceIndex),
                                             new ConstantArgProvider(om.getTargetMethodOrFieldParameter(), targetFieldName),
                                             new ConstantArgProvider(om.getClassNameParameter(), className.replace("/", ".")),
-                                            new ConstantArgProvider(om.getMethodParameter(), getName(om.isMethodFqn())),
+                                            new ConstantArgProvider(om.getMethodParameter(), getName()),
                                             new LocalVarArgProvider(om.getSelfParameter(), Type.getObjectType(className), 0));
 
                                         invokeBTraceAction(this, om);
@@ -753,7 +749,7 @@ public class Instrumentor extends ClassAdapter {
                                         new ConstantArgProvider(om.getTargetMethodOrFieldParameter(), targetFieldName),
                                         new LocalVarArgProvider(om.getReturnParameter(), fldType, returnValIndex),
                                         new ConstantArgProvider(om.getClassNameParameter(), className.replace("/", ".")),
-                                        new ConstantArgProvider(om.getMethodParameter(), getName(om.isMethodFqn())),
+                                        new ConstantArgProvider(om.getMethodParameter(), getName()),
                                         new LocalVarArgProvider(om.getSelfParameter(), Type.getObjectType(className), 0));
 
                                     invokeBTraceAction(this, om);
@@ -769,7 +765,7 @@ public class Instrumentor extends ClassAdapter {
                 // <editor-fold defaultstate="collapsed" desc="Field Set Instrumentor">
                 return new FieldAccessInstrumentor(mv, className, superName, access, name, desc) {
                     private String targetClassName = loc.getClazz();
-                    private String targetFieldName = (om.isTargetMethodOrFieldFqn() ? targetClassName + "." : "") + loc.getField();
+                    private String targetFieldName = loc.getField();
                     private int calledInstanceIndex = -1;
                     private int fldValueIndex = -1;
 
@@ -808,7 +804,7 @@ public class Instrumentor extends ClassAdapter {
                                             new LocalVarArgProvider(om.getTargetInstanceParameter(), TypeUtils.objectType, calledInstanceIndex),
                                             new ConstantArgProvider(om.getTargetMethodOrFieldParameter(), targetFieldName),
                                             new ConstantArgProvider(om.getClassNameParameter(), className.replace("/", ".")),
-                                            new ConstantArgProvider(om.getMethodParameter(), getName(om.isMethodFqn())),
+                                            new ConstantArgProvider(om.getMethodParameter(), getName()),
                                             new LocalVarArgProvider(om.getSelfParameter(), Type.getObjectType(className), 0));
 
                                         invokeBTraceAction(this, om);
@@ -843,7 +839,7 @@ public class Instrumentor extends ClassAdapter {
                                             new LocalVarArgProvider(om.getTargetInstanceParameter(), TypeUtils.objectType, calledInstanceIndex),
                                             new ConstantArgProvider(om.getTargetMethodOrFieldParameter(), targetFieldName),
                                             new ConstantArgProvider(om.getClassNameParameter(), className.replace("/", ".")),
-                                            new ConstantArgProvider(om.getMethodParameter(), getName(om.isMethodFqn())),
+                                            new ConstantArgProvider(om.getMethodParameter(), getName()),
                                             new LocalVarArgProvider(om.getSelfParameter(), Type.getObjectType(className), 0));
 
                                     invokeBTraceAction(this, om);
@@ -878,7 +874,7 @@ public class Instrumentor extends ClassAdapter {
                                     loadArguments(
                                         new LocalVarArgProvider(vr.getArgIdx(0), castType, castTypeIndex),
                                         new ConstantArgProvider(om.getClassNameParameter(), className.replace("/", ".")),
-                                        new ConstantArgProvider(om.getMethodParameter(), getName(om.isMethodFqn())),
+                                        new ConstantArgProvider(om.getMethodParameter(), getName()),
                                         new LocalVarArgProvider(om.getSelfParameter(), Type.getObjectType(className), 0));
 
                                     invokeBTraceAction(this, om);
@@ -919,7 +915,7 @@ public class Instrumentor extends ClassAdapter {
                                 loadArguments(
                                     new ConstantArgProvider(vr.getArgIdx(0), line),
                                     new ConstantArgProvider(om.getClassNameParameter(), className.replace("/", ".")),
-                                    new ConstantArgProvider(om.getMethodParameter(), getName(om.isMethodFqn())),
+                                    new ConstantArgProvider(om.getMethodParameter(), getName()),
                                     new LocalVarArgProvider(om.getSelfParameter(), Type.getObjectType(className), 0));
 
                                 invokeBTraceAction(this, om);
@@ -963,7 +959,7 @@ public class Instrumentor extends ClassAdapter {
                                         loadArguments(
                                             new ConstantArgProvider(vr.getArgIdx(0), extName),
                                             new ConstantArgProvider(om.getClassNameParameter(), className.replace("/", ".")),
-                                            new ConstantArgProvider(om.getMethodParameter(), getName(om.isMethodFqn())),
+                                            new ConstantArgProvider(om.getMethodParameter(), getName()),
                                             new LocalVarArgProvider(om.getSelfParameter(), Type.getObjectType(className), 0));
 
                                         invokeBTraceAction(this, om);
@@ -997,7 +993,7 @@ public class Instrumentor extends ClassAdapter {
                                             new ConstantArgProvider(vr.getArgIdx(0), extName),
                                             new LocalVarArgProvider(om.getReturnParameter(), instType, returnValIndex),
                                             new ConstantArgProvider(om.getClassNameParameter(), className.replace("/", ".")),
-                                            new ConstantArgProvider(om.getMethodParameter(), getName(om.isMethodFqn())),
+                                            new ConstantArgProvider(om.getMethodParameter(), getName()),
                                             new LocalVarArgProvider(om.getSelfParameter(), Type.getObjectType(className), 0));
 
                                         invokeBTraceAction(this, om);
@@ -1029,7 +1025,7 @@ public class Instrumentor extends ClassAdapter {
                                             new ConstantArgProvider(vr.getArgIdx(0), extName),
                                             new ConstantArgProvider(vr.getArgIdx(1), dims),
                                             new ConstantArgProvider(om.getClassNameParameter(), className.replace("/", ".")),
-                                            new ConstantArgProvider(om.getMethodParameter(), getName(om.isMethodFqn())),
+                                            new ConstantArgProvider(om.getMethodParameter(), getName()),
                                             new LocalVarArgProvider(om.getSelfParameter(), Type.getObjectType(className), 0));
 
                                         invokeBTraceAction(this, om);
@@ -1069,7 +1065,7 @@ public class Instrumentor extends ClassAdapter {
                                             new ConstantArgProvider(vr.getArgIdx(1), dims),
                                             new LocalVarArgProvider(om.getReturnParameter(), instType, returnValIndex),
                                             new ConstantArgProvider(om.getClassNameParameter(), className.replace("/", ".")),
-                                            new ConstantArgProvider(om.getMethodParameter(), getName(om.isMethodFqn())),
+                                            new ConstantArgProvider(om.getMethodParameter(), getName()),
                                             new LocalVarArgProvider(om.getSelfParameter(), Type.getObjectType(className), 0));
 
                                         invokeBTraceAction(this, om);
@@ -1126,7 +1122,7 @@ public class Instrumentor extends ClassAdapter {
                                     ptr += actionArgTypes[index].getSize();
                                 }
                             }
-                            actionArgs[actionArgTypes.length] = new ConstantArgProvider(om.getMethodParameter(), getName(om.isMethodFqn()));
+                            actionArgs[actionArgTypes.length] = new ConstantArgProvider(om.getMethodParameter(), getName());
                             actionArgs[actionArgTypes.length + 1] = new ConstantArgProvider(om.getClassNameParameter(), className.replace("/", "."));
                             actionArgs[actionArgTypes.length + 2] = new LocalVarArgProvider(om.getReturnParameter(), getReturnType(), retValIndex);
                             actionArgs[actionArgTypes.length + 3] = new ArgumentProvider(om.getDurationParameter()) {
@@ -1186,7 +1182,7 @@ public class Instrumentor extends ClassAdapter {
                                 loadArguments(
                                     new LocalVarArgProvider(vr.getArgIdx(0), TypeUtils.objectType, index),
                                     new ConstantArgProvider(om.getClassNameParameter(), className),
-                                    new ConstantArgProvider(om.getMethodParameter(), getName(om.isMethodFqn())),
+                                    new ConstantArgProvider(om.getMethodParameter(), getName()),
                                     new LocalVarArgProvider(om.getSelfParameter(), Type.getObjectType(className), 0));
                                 invokeBTraceAction(this, om);
                             } finally {
@@ -1236,7 +1232,7 @@ public class Instrumentor extends ClassAdapter {
                                 loadArguments(
                                     new LocalVarArgProvider(vr.getArgIdx(0), TypeUtils.objectType, index),
                                     new ConstantArgProvider(om.getClassNameParameter(), className),
-                                    new ConstantArgProvider(om.getMethodParameter(), getName(om.isMethodFqn())),
+                                    new ConstantArgProvider(om.getMethodParameter(), getName()),
                                     new LocalVarArgProvider(om.getSelfParameter(), Type.getObjectType(className), 0));
 
                                 invokeBTraceAction(this, om);
@@ -1288,7 +1284,7 @@ public class Instrumentor extends ClassAdapter {
                                 loadArguments(
                                     new LocalVarArgProvider(vr.getArgIdx(0), TypeUtils.throwableType, throwableIndex),
                                     new ConstantArgProvider(om.getClassNameParameter(), className.replace("/", ".")),
-                                    new ConstantArgProvider(om.getMethodParameter(),getName(om.isMethodFqn())),
+                                    new ConstantArgProvider(om.getMethodParameter(),getName()),
                                     new LocalVarArgProvider(om.getSelfParameter(), Type.getObjectType(className), 0));
 
                                 invokeBTraceAction(this, om);

@@ -146,43 +146,16 @@ public class Aggregation implements Cloneable {
             int rowSize = keyElements.length + 1;
 
             Object[] row = new Object[rowSize];
-            System.arraycopy(keyElements, 0, row, 0, keyElements.length);
+            for (int i = 0; i < keyElements.length; i++) {
+                row[i] = keyElements[i];
+            }
             row[rowSize - 1] = item.getValue().getData();
             result.add(row);
         }
 
         return result;
     }
-    
-    
-    /**
-     * Returns a list of the AggregationKeys that belong to this aggregation. 
-     * @return a list of aggregationsKeys belonging to this aggregation.
-     */
-    public List<AggregationKey> getKeyData() {
-    	List<AggregationKey> keyList = new ArrayList<AggregationKey>();
-    	List<Entry<AggregationKey, AggregationValue>> sortedContents = sort();
-    	for (Entry<AggregationKey, AggregationValue> item : sortedContents) {
-    		keyList.add(item.getKey());
-    	}
-    	
-    	return keyList;
-    }
 
-    /**
-     * Returns a value for the given key if the key has a value associated with it. Returns zero if the key is not 
-     * valid for this Aggregation.
-     * @param key
-     * @return the value for the given key, or zero. 
-     */
-    public Long getValueForKey(AggregationKey key) {
-    	AggregationValue aggregationValue = values.get(key);
-    	if (aggregationValue != null) {
-    		return aggregationValue.getValue();
-    	} else {
-    		return 0l;
-    	}
-    }
     /**
      * @return a list of key/value pairs contained in this aggregation by sorted by ascending value.
      */

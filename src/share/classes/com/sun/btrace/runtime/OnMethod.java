@@ -53,8 +53,6 @@ public class OnMethod {
     private int targetMethodOrFieldParameter = -1;
     private int targetInstanceParameter = -1;
     private int durationParameter = -1;
-    private boolean methodFqn = false;
-    private boolean targetMethodFqn = false;
     
     public OnMethod() {
     }
@@ -136,22 +134,6 @@ public class OnMethod {
 
     public void setMethodParameter(int methodParameter) {
         this.methodParameter = methodParameter;
-    }
-
-    public boolean isMethodFqn() {
-        return methodFqn;
-    }
-
-    public void setMethodFqn(boolean val) {
-        methodFqn = val;
-    }
-
-    public boolean isTargetMethodOrFieldFqn() {
-        return targetMethodFqn;
-    }
-
-    public void setTargetMethodOrFieldFqn(boolean val) {
-        targetMethodFqn = val;
     }
 
     public int getReturnParameter() {

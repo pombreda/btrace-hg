@@ -45,6 +45,6 @@ import static com.sun.btrace.BTraceUtils.*;
     public static void onGetProperty(String name) {
         println(name);
         // call property safely here.
-        println(Sys.Env.property(name));
+        println(property(name));
     } 
 }	

@@ -40,9 +40,8 @@ import java.util.Map;
 import java.util.StringTokenizer;
 import java.util.jar.JarFile;
 import com.sun.btrace.BTraceRuntime;
-import com.sun.btrace.comm.ErrorCommand;
-import com.sun.btrace.comm.ExitCommand;
-import com.sun.btrace.comm.OkayCommand;
+import com.sun.btrace.comm.RetransformationStartNotification;
+import com.sun.btrace.comm.WireIO;
 import com.sun.btrace.runtime.OnProbe;
 import com.sun.btrace.runtime.OnMethod;
 import com.sun.btrace.runtime.ProbeDescriptor;
@@ -53,14 +52,11 @@ import java.io.PrintWriter;
 import java.util.Date;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
 
 /**
  * This is the main class for BTrace java.lang.instrument agent.
  *
  * @author A. Sundararajan
- * @authos Joachim Skeie (rolling output)
  */
 public final class Main {
     private static volatile Map<String, String> argMap;
@@ -72,30 +68,8 @@ public final class Main {
     private static volatile String dumpDir;
     private static volatile String probeDescPath;
     private static volatile String scriptOutputFile;
-    private static volatile Long fileRollMilliseconds;;
 
-    // #BTRACE-42: Non-daemon thread prevents traced application from exiting
-    private static final ThreadFactory daemonizedThreadFactory = new ThreadFactory() {
-        ThreadFactory delegate = Executors.defaultThreadFactory();
-        @Override
-        public Thread newThread(Runnable r) {
-            Thread result = delegate.newThread(r);
-            result.setDaemon(true);
-            return result;
-        }
-    };
-    
-    private static final ExecutorService serializedExecutor = Executors.newSingleThreadExecutor(daemonizedThreadFactory);
-
-    private static void registerExitHook(final Client c) {
-        Runtime.getRuntime().addShutdownHook(new Thread(
-            new Runnable() {
-                public void run() {
-                    BTraceRuntime rt = c.getRuntime();
-                    if (rt != null) rt.handleExit(0);
-                }
-            }));
-    }
+    private static final ExecutorService serializedExecutor = Executors.newSingleThreadExecutor();
 
     public static void premain(String args, Instrumentation inst) {
         main(args, inst);
@@ -219,19 +193,6 @@ public final class Main {
         if (scriptOutputFile != null && scriptOutputFile.length() > 0) {
             if (isDebug()) debugPrint("scriptOutputFile is " + scriptOutputFile);
         }
-        p = argMap.get("fileRollMilliseconds");
-        if (p != null && p.length() > 0) {
-            Long msParsed = null;
-            try {
-                msParsed = Long.parseLong(p);
-                fileRollMilliseconds = msParsed;
-            } catch (NumberFormatException nfe) {
-                fileRollMilliseconds = null;
-            }
-            if (fileRollMilliseconds != null) {
-                if (isDebug()) debugPrint("fileRollMilliseconds is " + fileRollMilliseconds);
-            }
-        }
 	p = argMap.get("unsafe");
         unsafeMode = "true".equals(p);
         if (isDebug()) debugPrint("unsafeMode is " + unsafeMode);
@@ -292,7 +253,7 @@ public final class Main {
     // For now, please avoid using this in any other scenario. 
     public static void handleFlashLightClient(byte[] code) {
         try {
-            String twn = "flashlighttrace" + (new Date()).getTime();
+            String twn = new String("flashlighttrace" + (new Date()).getTime());
             PrintWriter traceWriter = null;
             traceWriter = new PrintWriter(new BufferedWriter(new FileWriter(new File(twn + ".btrace"))));
             handleFlashLightClient(code, traceWriter);
@@ -321,18 +282,11 @@ public final class Main {
             if (traceToStdOut) {
                 traceWriter = new PrintWriter(System.out);
             } else {
-                String agentName = System.getProperty("btrace.agent", null);
-            	String currentBtraceScriptOutput = scriptOutputFile;
-            	
-                if (currentBtraceScriptOutput == null || currentBtraceScriptOutput.length() == 0) {
-                    currentBtraceScriptOutput = filename + (agentName != null ? "." + agentName  : "") + ".btrace";
-                    if (isDebug()) debugPrint("scriptOutputFile not specified. defaulting to " + currentBtraceScriptOutput);
+                if (scriptOutputFile == null || scriptOutputFile.length() == 0) {
+                    scriptOutputFile = filename + ".btrace";
+                    if (isDebug()) debugPrint("scriptOutputFile not specified. defaulting to " + scriptOutputFile);
                 }
-                if (fileRollMilliseconds != null && fileRollMilliseconds.longValue() > 0) {
-                    traceWriter = new PrintWriter(new BufferedWriter(TraceOutputWriter.rollingFileWriter(new File(currentBtraceScriptOutput), 100, fileRollMilliseconds, TimeUnit.MILLISECONDS)));
-                } else {
-                    traceWriter = new PrintWriter(new BufferedWriter(TraceOutputWriter.fileWriter(new File(currentBtraceScriptOutput))));
-                }
+                traceWriter = new PrintWriter(new BufferedWriter(new FileWriter(new File(scriptOutputFile))));
             }
 
             Client client = new FileClient(inst, traceScript, traceWriter);
@@ -377,7 +331,6 @@ public final class Main {
                 Socket sock = ss.accept();
                 if (isDebug()) debugPrint("client accepted " + sock);
                 Client client = new RemoteClient(inst, sock);
-                registerExitHook(client);
                 handleNewClient(client);
             } catch (RuntimeException re) {
                 if (isDebug()) debugPrint(re);
@@ -437,15 +390,14 @@ public final class Main {
                             } else {
                                 inst.retransformClasses(classes);
                             }
+                            client.endRetransformClasses();
                             client.skipRetransforms();
                         }
                     }
-                    client.getRuntime().send(new OkayCommand());
                 } catch (UnmodifiableClassException uce) {
                     if (isDebug()) {
                         debugPrint(uce);
                     }
-                    client.getRuntime().send(new ErrorCommand(uce));
                 }
             }
         });
@@ -478,7 +430,6 @@ public final class Main {
                     file = targetClassName;
                 }
                 file += ".class";
-                new File(dir).mkdirs();
                 File out = new File(dir, file);
                 FileOutputStream fos = new FileOutputStream(out);
                 try {

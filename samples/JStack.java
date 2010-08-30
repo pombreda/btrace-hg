@@ -26,8 +26,7 @@
 package com.sun.btrace.samples;
 
 import com.sun.btrace.annotations.*;
-import static com.sun.btrace.BTraceUtils.Sys.*;
-import static com.sun.btrace.BTraceUtils.Threads.*;
+import static com.sun.btrace.BTraceUtils.*;
 
 /*
  * A simple sample prints stack traces and exits. This

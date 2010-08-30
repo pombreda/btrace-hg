@@ -59,10 +59,6 @@ import com.sun.btrace.comm.NumberDataCommand;
 import com.sun.btrace.comm.NumberMapDataCommand;
 import com.sun.btrace.comm.StringMapDataCommand;
 import com.sun.btrace.comm.GridDataCommand;
-import com.sun.btrace.profiling.MethodInvocationProfiler;
-
-import java.lang.management.GarbageCollectorMXBean;
-
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.BufferedWriter;
@@ -118,8 +114,6 @@ import sun.security.action.GetPropertyAction;
  *
  * @author A. Sundararajan
  * @author Christian Glencross (aggregation support)
- * @author Joachim Skeie (GC MBean support, advanced Deque manipulation)
- * @author KLynch
  */
 public final class BTraceRuntime {
     // we need Unsafe to load BTrace class bytes as
@@ -138,38 +132,18 @@ public final class BTraceRuntime {
     private static final boolean messageTimestamp = false;
     private static final String LINE_SEPARATOR;
 
-    final private static Thread samplerThread;
-    volatile public static long TIMESTAMP = 0L;
-
     static {
         dummy = new BTraceRuntime();
         NULL = new BTraceRuntime();
         LINE_SEPARATOR = System.getProperty("line.separator");
-
-        if (Boolean.getBoolean("btrace.timer.sampled")) {
-            final long interval = Long.parseLong(System.getProperty("btrace.timer.sampled.interval", "500"));
-            long time = System.nanoTime();
-            for(int i=0;i<1000;i++) {
-                unsafe.park(false, interval);
-            }
-            time = System.nanoTime() - time;
-            final long step = (long)(time / 1000);
-
-            samplerThread = new Thread(new Runnable() {
-
-                public void run() {
-                    while (true) {
-                        unsafe.park(false, interval);
-                        TIMESTAMP+=step;
-                    }
-                }
-            }, "BTrace Sampled Timer");
-            samplerThread.setDaemon(true);
-            samplerThread.start();
-        } else {
-            samplerThread = null;
-        }
     }
+
+    // at most one BTrace action method runs per thread.
+    // This way platform classes (which may be called by BTrace)
+    // may be instrumented. Also, this helps in inteferring with
+    // other BTrace clients that may be running concurrently.
+    private static ThreadLocal<BTraceRuntime> tls =
+        new ThreadLocal<BTraceRuntime>();
 
     private static ThreadEnteredMap map = new ThreadEnteredMap(NULL);
 
@@ -191,8 +165,6 @@ public final class BTraceRuntime {
     private static volatile MemoryMXBean memoryMBean;
     private static volatile RuntimeMXBean runtimeMBean;
     private static volatile ThreadMXBean threadMBean;
-    private static volatile List<GarbageCollectorMXBean> gcBeanList;
-    private static volatile List<MemoryPoolMXBean> memPoolList;
 
     // bytecode generator that generates Runnable implementations
     private static RunnableGenerator runnableGenerator;
@@ -443,10 +415,6 @@ public final class BTraceRuntime {
         }
     }
 
-    public void handleExit(int exitCode) {
-        exitImpl(exitCode);
-    }
-
     public void handleEvent(EventCommand ecmd) {
         if (eventHandlers != null) {
             String event = ecmd.getEvent();
@@ -681,7 +649,7 @@ public final class BTraceRuntime {
         }
     }
 
-    // package-private interface to BTraceUtils class.
+    // package-private interface to BTraceUtil class.
 
     static int speculation() {
         BTraceRuntime current = getCurrent();
@@ -738,14 +706,6 @@ public final class BTraceRuntime {
         return new BTraceDeque<V>(new ArrayDeque<V>());
     }
 
-    static Appendable newStringBuilder(boolean threadSafe) {
-    	return threadSafe ? new StringBuffer() : new StringBuilder();
-    }
-
-    static Appendable newStringBuilder() {
-    	return newStringBuilder(false);
-    }
-
     static <E> int size(Collection<E> coll) {
         if (coll instanceof BTraceCollection || coll.getClass().getClassLoader() == null) {
             return coll.size();
@@ -775,14 +735,6 @@ public final class BTraceRuntime {
         }
     }
 
-    static <E >Object[] toArray(Collection<E> collection) {
-    	if (collection == null) {
-    		return new Object[0];
-    	} else {
-    		return collection.toArray();
-    	}
-    }
-    
     static <K, V> V get(Map<K, V> map, Object key) {
         if (map instanceof BTraceMap ||
             map.getClass().getClassLoader() == null) {
@@ -852,15 +804,6 @@ public final class BTraceRuntime {
         }
     }
 
-    static <K,V> void putAll(Map<K,V> src, Map<K,V> dst) {
-        dst.putAll(src);
-    }
-
-    static <K, V> void copy(Map<K,V> src, Map<K,V> dst) {
-        dst.clear();
-        dst.putAll(src);
-    }
-    
     static void printMap(Map map) {
         if (map instanceof BTraceMap ||
             map.getClass().getClassLoader() == null) {
@@ -868,58 +811,18 @@ public final class BTraceRuntime {
                 Map<String, String> m = new HashMap<String, String>();
                 Set<Map.Entry<Object, Object>> entries = map.entrySet();
                 for (Map.Entry<Object, Object> e : entries) {
-                   m.put(BTraceUtils.Strings.str(e.getKey()), BTraceUtils.Strings.str(e.getValue()));
+                   m.put(BTraceUtils.str(e.getKey()), BTraceUtils.str(e.getValue()));
                 }
                 printStringMap(null, m);
             }
         } else {
-            print(BTraceUtils.Strings.str(map));
+            print(BTraceUtils.str(map));
         }
     }
 
     public static <V> void push(Deque<V> queue, V value) {
         if (queue instanceof BTraceDeque || queue.getClass().getClassLoader() == null) {
             queue.push(value);
-        } else {
-            throw new IllegalArgumentException();
-        }
-    }
-
-    public static <V> void addLast(Deque<V> queue, V value) {
-        if (queue instanceof BTraceDeque || queue.getClass().getClassLoader() == null) {
-            queue.addLast(value);
-        } else {
-            throw new IllegalArgumentException();
-        }
-    }
-
-    public static <V> V peekFirst(Deque<V> queue) {
-        if (queue instanceof BTraceDeque || queue.getClass().getClassLoader() == null) {
-            return queue.peekFirst();
-        } else {
-            throw new IllegalArgumentException();
-        }
-    }
-
-    public static <V> V peekLast(Deque<V> queue) {
-        if (queue instanceof BTraceDeque || queue.getClass().getClassLoader() == null) {
-            return queue.peekLast();
-        } else {
-            throw new IllegalArgumentException();
-        }
-    }
-
-    public static <V> V removeLast(Deque<V> queue) {
-        if (queue instanceof BTraceDeque || queue.getClass().getClassLoader() == null) {
-            return queue.removeLast();
-        } else {
-            throw new IllegalArgumentException();
-        }
-    }
-
-    public static <V> V removeFirst(Deque<V> queue) {
-        if (queue instanceof BTraceDeque || queue.getClass().getClassLoader() == null) {
-            return queue.removeLast();
         } else {
             throw new IllegalArgumentException();
         }
@@ -949,26 +852,6 @@ public final class BTraceRuntime {
         }
     }
 
-    public static Appendable append(Appendable buffer, String strToAppend) {
-    	try {
-            if (buffer != null && strToAppend != null) {
-                return buffer.append(strToAppend);
-            } else {
-                throw new IllegalArgumentException();
-            }
-        } catch (IOException e) {
-            throw new IllegalArgumentException(e);
-        }
-    }
-
-    public static int length(Appendable buffer) {
-    	if (buffer != null && buffer instanceof CharSequence) {
-            return ((CharSequence)buffer).length();
-    	} else {
-            throw new IllegalArgumentException();
-    	}
-    }
-    
     static void printNumber(String name, Number value) {
         getCurrent().send(new NumberDataCommand(name, value));
     }
@@ -1245,7 +1128,7 @@ public final class BTraceRuntime {
     }
 
     // stack trace functions
-    private static String stackTraceAllStr(int numFrames, boolean printWarning) {
+    static String stackTraceAllStr(int numFrames) {
         Set<Map.Entry<Thread, StackTraceElement[]>> traces =
                 Thread.getAllStackTraces().entrySet();
         StringBuilder buf = new StringBuilder();
@@ -1254,32 +1137,23 @@ public final class BTraceRuntime {
             buf.append(LINE_SEPARATOR);
             buf.append(LINE_SEPARATOR);
             StackTraceElement[] st = t.getValue();
-            buf.append(stackTraceStr("\t", st, 0, numFrames, printWarning));
+            buf.append(stackTraceStr("\t", st, 0, numFrames));
             buf.append(LINE_SEPARATOR);
         }
         return buf.toString();
     }
 
-    static String stackTraceAllStr(int numFrames) {
-        return stackTraceAllStr(numFrames, false);
-    }
-
     static void stackTraceAll(int numFrames) {
-        getCurrent().send(stackTraceAllStr(numFrames, true));
+        getCurrent().send(stackTraceAllStr(numFrames));
     }
 
     static String stackTraceStr(StackTraceElement[] st,
                                  int start, int numFrames) {
-        return stackTraceStr(null, st, start, numFrames, false);
+        return stackTraceStr(null, st, start, numFrames);
     }
 
     static String stackTraceStr(String prefix, StackTraceElement[] st,
                                  int start, int numFrames) {
-        return stackTraceStr(prefix, st, start, numFrames, false);
-    }
-
-    private static String stackTraceStr(String prefix, StackTraceElement[] st,
-                                 int start, int numFrames, boolean printWarning) {
         start = start > 0 ? start : 0;
         numFrames = numFrames > 0 ? numFrames : st.length - start;
 
@@ -1290,12 +1164,12 @@ public final class BTraceRuntime {
 
         StringBuilder buf = new StringBuilder();
         for (int i = start; i < limit; i++) {
-            if (prefix != null) buf.append(prefix);
+            buf.append(prefix);
             buf.append(st[i].toString());
             buf.append(LINE_SEPARATOR);
         }
-        if (printWarning && limit < st.length) {
-            if (prefix != null) buf.append(prefix);
+        if (limit < st.length) {
+            buf.append(prefix);
             buf.append(st.length - limit);
             buf.append(" more frame(s) ...");
             buf.append(LINE_SEPARATOR);
@@ -1310,7 +1184,7 @@ public final class BTraceRuntime {
 
     static void stackTrace(String prefix, StackTraceElement[] st,
                                  int start, int numFrames) {
-        getCurrent().send(stackTraceStr(prefix, st, start, numFrames, true));
+        getCurrent().send(stackTraceStr(prefix, st, start, numFrames));
     }
 
     // print/println functions
@@ -1449,39 +1323,6 @@ public final class BTraceRuntime {
             throw new RuntimeException(exp);
         }
     }
-
-    static long getTotalGcTime() {
-    	initGarbageCollectionBeans();
-    	long totalGcTime = 0;
-    	for (GarbageCollectorMXBean gcBean : gcBeanList) {
-    		totalGcTime += gcBean.getCollectionTime();
-    	}
-    	return totalGcTime;
-    }
-
-    static String getMemoryPoolUsage(String poolFormat) {
-        if (poolFormat == null) {
-            poolFormat = "%1$s;%2$d;%3$d;%4$d;%5$d";
-        }
-    	Object[][] poolOutput = new Object[memPoolList.size()][5];
-
-    	StringBuilder membuffer = new StringBuilder();
-
-    	for (int i = 0; i < memPoolList.size(); i++) {
-            MemoryPoolMXBean memPool = memPoolList.get(i);
-            poolOutput[i][0] = memPool.getName();
-            poolOutput[i][1] = new Long(memPool.getUsage().getMax());
-            poolOutput[i][2] = new Long(memPool.getUsage().getUsed());
-            poolOutput[i][3] = new Long(memPool.getUsage().getCommitted());
-            poolOutput[i][4] = new Long(memPool.getUsage().getInit());
-
-    	}
-    	for (Object[] memPoolOutput : poolOutput) {
-            membuffer.append(String.format(poolFormat, memPoolOutput)).append("\n");
-        }
-
-    	return membuffer.toString();
-     }
 
     static void serialize(Object obj, String fileName) {
         try {
@@ -1651,57 +1492,6 @@ public final class BTraceRuntime {
         getCurrent().send(new GridDataCommand(name, aggregation.getData()));
     }
 
-    static void printSnapshot(String name, Profiler.Snapshot snapshot) {
-        getCurrent().send(new GridDataCommand(name, snapshot.getGridData()));
-    }
-
-    /**
-     * Prints profiling snapshot using the provided format
-     * @param name The name of the aggregation to be used in the textual output
-     * @param snapshot The snapshot to print
-     * @param format The format to use. It mimics {@linkplain String#format(java.lang.String, java.lang.Object[]) } behaviour
-     *               with the addition of the ability to address the key title as a 0-indexed item
-     * @see String#format(java.lang.String, java.lang.Object[])
-     */
-    static void printSnapshot(String name, Profiler.Snapshot snapshot, String format) {
-        getCurrent().send(new GridDataCommand(name, snapshot.getGridData(), format));
-    }
-    /**
-     * Precondition: Only values from the first Aggregation are printed. If the subsequent aggregations have 
-     * values for keys which the first aggregation does not have, these rows are ignored. 
-     * @param name
-     * @param format
-     * @param aggregationArray
-     */
-    static void printAggregation(String name, String format, Aggregation[] aggregationArray) {
-    	if (aggregationArray.length > 1 && aggregationArray[0].getKeyData().size() > 1) {
-    		int aggregationDataSize = aggregationArray[0].getKeyData().get(0).getElements().length + aggregationArray.length;
-    		
-    		List<Object[]> aggregationData = new ArrayList<Object[]>();
-    		
-    		//Iterate through all keys in the first Aggregation and build up an array of aggregationData
-    		for (AggregationKey aggKey : aggregationArray[0].getKeyData()) {
-    			int aggDataIndex = 0;
-    			Object[] currAggregationData = new Object[aggregationDataSize];
-    			
-    			//Add the key to the from of the current aggregation Data
-    			for (Object obj : aggKey.getElements()) {
-    				currAggregationData[aggDataIndex] = obj;
-    				aggDataIndex++;
-    			}
-    			
-    			for (Aggregation agg : aggregationArray) {
-    				currAggregationData[aggDataIndex] = agg.getValueForKey(aggKey);
-    				aggDataIndex++;
-            	}
-    			
-    			aggregationData.add(currAggregationData);
-    		}
-    			
-    		getCurrent().send(new GridDataCommand(name, aggregationData, format));
-    	}
-    }
-
     /**
      * Prints aggregation using the provided format
      * @param name The name of the aggregation to be used in the textual output
@@ -1712,53 +1502,6 @@ public final class BTraceRuntime {
      */
     static void printAggregation(String name, Aggregation aggregation, String format) {
         getCurrent().send(new GridDataCommand(name, aggregation.getData(), format));
-    }
-
-    // profiling related methods
-    /**
-     * @see BTraceUtils.Profiling#newProfiler()
-     */
-    static Profiler newProfiler() {
-        return new MethodInvocationProfiler(600);
-    }
-
-    /**
-     * @see BTraceUtils.Profiling#newProfiler(int)
-     */
-    static Profiler newProfiler(int expectedMethodCnt) {
-        return new MethodInvocationProfiler(expectedMethodCnt);
-    }
-
-    /**
-     * @see BTraceUtils.Profiling#recordEntry(com.sun.btrace.Profiler, java.lang.String)
-     */
-    static void recordEntry(Profiler profiler, String methodName) {
-        profiler.recordEntry(methodName);
-    }
-
-    /**
-     * @see BTraceUtils.Profiling#recordExit(com.sun.btrace.Profiler, java.lang.String, long)
-     */
-    static void recordExit(Profiler profiler, String methodName, long duration) {
-        profiler.recordExit(methodName, duration);
-    }
-
-    /**
-     * @see BTraceUtils.Profiling#snapshot(com.sun.btrace.Profiler) 
-     */
-    static Profiler.Snapshot snapshot(Profiler profiler) {
-        return profiler.snapshot();
-    }
-
-    /**
-     * @see BTraceUtils.Profiling#snapshotAndReset(com.sun.btrace.Profiler)
-     */
-    static Profiler.Snapshot snapshotAndReset(Profiler profiler) {
-        return profiler.snapshot(true);
-    }
-
-    static void resetProfiler(Profiler profiler) {
-        profiler.reset();
     }
 
     // private methods below this point
@@ -1941,39 +1684,6 @@ public final class BTraceRuntime {
         }
     }
 
-    private static List<GarbageCollectorMXBean> getGarbageCollectionMBeans() {
-        try {
-            return AccessController.doPrivileged(
-                new PrivilegedExceptionAction<List<GarbageCollectorMXBean>>() {
-                    public List<GarbageCollectorMXBean> run() throws Exception {
-                        return ManagementFactory.getGarbageCollectorMXBeans();
-                   }
-                });
-        } catch (Exception exp) {
-            throw new UnsupportedOperationException(exp);
-        }
-    }
-
-    private static void initGarbageCollectionBeans() {
-        if (gcBeanList == null) {
-            synchronized (BTraceRuntime.class) {
-                if (gcBeanList == null) {
-                	gcBeanList = getGarbageCollectionMBeans();
-                }
-            }
-        }
-    }
-
-    private static void initMemoryPoolList() {
-        if (memPoolList == null) {
-            synchronized (BTraceRuntime.class) {
-                if (memPoolList == null) {
-                    memPoolList = getMemoryPoolMXBeans();
-                }
-            }
-        }
-    }
-
     private static PerfReader getPerfReader() {
         if (perfReader == null) {
             throw new UnsupportedOperationException();
@@ -1990,7 +1700,7 @@ public final class BTraceRuntime {
                                msg));
     }
 
-    public void send(Command cmd) {
+    private void send(Command cmd) {
         try {
             boolean speculated = specQueueManager.send(cmd);
             if (! speculated) {
@@ -2033,7 +1743,7 @@ public final class BTraceRuntime {
 
     private void startImpl() {
         if (timerHandlers != null && timerHandlers.length != 0) {
-            timer = new Timer(true);
+            timer = new Timer();
             RunnableGenerator gen = getRunnableGenerator();
             Runnable[] runnables = new Runnable[timerHandlers.length];
             if (gen != null) {
@@ -2217,8 +1927,8 @@ public final class BTraceRuntime {
             }
         }
 
-        initMemoryPoolList();
-        for (MemoryPoolMXBean mpoolBean : memPoolList) {
+        List<MemoryPoolMXBean> mpools = getMemoryPoolMXBeans();
+        for (MemoryPoolMXBean mpoolBean : mpools) {
             String name = mpoolBean.getName();
             if (lowMemHandlers.containsKey(name)) {
                 Method m = lowMemHandlers.get(name);

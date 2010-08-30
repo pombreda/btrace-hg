@@ -26,7 +26,6 @@
 package com.sun.btrace.samples;
 
 import static com.sun.btrace.BTraceUtils.*;
-import static com.sun.btrace.BTraceUtils.Strings.*;
 import com.sun.btrace.annotations.*;
 
 /**
