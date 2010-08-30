@@ -27,7 +27,6 @@ package com.sun.btrace.samples;
 
 import com.sun.btrace.annotations.*;
 import static com.sun.btrace.BTraceUtils.*;
-import static com.sun.btrace.BTraceUtils.Strings.*;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -57,7 +56,7 @@ import java.io.FileOutputStream;
     )
     public static void onNewFileInputStreamReturn() {
         if (name != null) {
-            println(Strings.strcat("opened for read ", name));
+            println(strcat("opened for read ", name));
             name = null;
         }
     }
@@ -78,7 +77,7 @@ import java.io.FileOutputStream;
     )
     public static void OnNewFileOutputStreamReturn() {
         if (name != null) {
-            println(Strings.strcat("opened for write ", name));
+            println(strcat("opened for write ", name));
             name = null;
         }
     }

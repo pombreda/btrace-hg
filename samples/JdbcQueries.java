@@ -25,10 +25,19 @@
 
 package com.sun.btrace.samples;
 
-import static com.sun.btrace.BTraceUtils.*;
-import static com.sun.btrace.BTraceUtils.Collections.*;
-import static com.sun.btrace.BTraceUtils.Aggregations.*;
-import static com.sun.btrace.BTraceUtils.Threads.*;
+import static com.sun.btrace.BTraceUtils.$;
+import static com.sun.btrace.BTraceUtils.addToAggregation;
+import static com.sun.btrace.BTraceUtils.get;
+import static com.sun.btrace.BTraceUtils.jstackStr;
+import static com.sun.btrace.BTraceUtils.newAggregation;
+import static com.sun.btrace.BTraceUtils.newAggregationKey;
+import static com.sun.btrace.BTraceUtils.newWeakMap;
+import static com.sun.btrace.BTraceUtils.print;
+import static com.sun.btrace.BTraceUtils.printAggregation;
+import static com.sun.btrace.BTraceUtils.println;
+import static com.sun.btrace.BTraceUtils.put;
+import static com.sun.btrace.BTraceUtils.str;
+import static com.sun.btrace.BTraceUtils.strcmp;
 
 import java.sql.Statement;
 import java.util.Map;
@@ -45,8 +54,6 @@ import com.sun.btrace.annotations.Location;
 import com.sun.btrace.annotations.OnEvent;
 import com.sun.btrace.annotations.OnMethod;
 import com.sun.btrace.annotations.TLS;
-import com.sun.btrace.annotations.Return;
-import com.sun.btrace.annotations.Self;
 
 /**
  * BTrace script to print timings for all executed JDBC statements on an event. Demonstrates
@@ -85,7 +92,7 @@ public class JdbcQueries {
      * 
      * Otherwise we print the SQL.
      */
-    private static boolean useStackTrace = Sys.$(2) != null && Strings.strcmp("--stack", Sys.$(2)) == 0;
+    private static boolean useStackTrace = $(2) != null && strcmp("--stack", $(2)) == 0;
 
     // The first couple of probes capture whenever prepared statement and callable statements are
     // instantiated, in order to let us track what SQL they contain.
@@ -98,7 +105,7 @@ public class JdbcQueries {
      */
     @OnMethod(clazz = "+java.sql.Connection", method = "/prepare.*/")
     public static void onPrepare(AnyType[] args) {
-        preparingStatement = useStackTrace ? jstackStr() : str(args[0]);
+        preparingStatement = useStackTrace ? jstackStr() : str(args[1]);
     }
 
     /**
@@ -108,9 +115,10 @@ public class JdbcQueries {
      *            the return value from the prepareXxx() method.
      */
     @OnMethod(clazz = "+java.sql.Connection", method = "/prepare.*/", location = @Location(Kind.RETURN))
-    public static void onPrepareReturn(@Return Statement preparedStatement) {
+    public static void onPrepareReturn(AnyType arg) {
         if (preparingStatement != null) {
             print("P"); // Debug Prepared
+            Statement preparedStatement = (Statement) arg;
             put(preparedStatementDescriptions, preparedStatement, preparingStatement);
             preparingStatement = null;
         }
@@ -121,13 +129,14 @@ public class JdbcQueries {
     // Otherwise the SQL is in the first argument.
 
     @OnMethod(clazz = "+java.sql.Statement", method = "/execute.*/")
-    public static void onExecute(@Self Statement currentStatement, AnyType[] args) {
-        if (args.length == 0) {
+    public static void onExecute(AnyType[] args) {
+        if (args.length == 1) {
             // No SQL argument; lookup the SQL from the prepared statement
+            Statement currentStatement = (Statement) args[0]; // this
             executingStatement = get(preparedStatementDescriptions, currentStatement);
         } else {
             // Direct SQL in the first argument
-            executingStatement = useStackTrace ? jstackStr() : str(args[0]);
+            executingStatement = useStackTrace ? jstackStr() : str(args[1]);
         }
     }
 
@@ -158,7 +167,7 @@ public class JdbcQueries {
     public static void onEvent() {
 
         // Top 10 queries only
-        truncateAggregation(histogram, 10);
+        BTraceUtils.truncateAggregation(histogram, 10);
 
         println("---------------------------------------------");
         printAggregation("Count", count);

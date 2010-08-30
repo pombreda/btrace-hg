@@ -78,7 +78,7 @@ class RemoteClient extends Client {
                             BTraceRuntime.enter(getRuntime());
                             try {
                                 if (debug) Main.debugPrint("calling BTraceUtils.exit()");
-                                BTraceUtils.Sys.exit(ecmd.getExitCode());
+                                BTraceUtils.exit(ecmd.getExitCode());
                             } catch (Throwable th) {
                                 if (debug) Main.debugPrint(th);
                                 BTraceRuntime.handleException(th);

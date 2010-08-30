@@ -29,6 +29,8 @@ import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.io.PrintWriter;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * A simple data command that has one number value.
@@ -53,10 +55,6 @@ public class NumberDataCommand extends DataCommand {
             out.print(" = ");
         }
         out.println(value);
-    }
-
-    public Number getValue() {
-        return value;
     }
     
     protected void write(ObjectOutput out) throws IOException {

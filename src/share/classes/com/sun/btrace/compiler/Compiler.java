@@ -24,8 +24,6 @@
  */
 package com.sun.btrace.compiler;
 
-import com.sun.btrace.org.objectweb.asm.ClassReader;
-import com.sun.btrace.org.objectweb.asm.ClassWriter;
 import javax.annotation.processing.Processor;
 import com.sun.source.util.JavacTask;
 import com.sun.btrace.util.Messages;
@@ -46,7 +44,7 @@ import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
 
 /**
- * Compiler for a BTrace program. Note that a BTrace
+ * Compiler for a BTrace program. Note that a BTrace 
  * program is a Java program that is specially annotated
  * and can *not* use many Java constructs (essentially java--).
  * We use JSR 199 API to compile BTrace program but validate
@@ -119,7 +117,7 @@ public class Compiler {
                     includePath = args[++count];
                     includePathDefined = true;
                 } else if (args[count].equals("-unsafe") && !unsafeDefined) {
-                    unsafe = true;
+                    unsafe = true; 
                     unsafeDefined = true;
                 } else {
                     usage();
@@ -210,7 +208,7 @@ public class Compiler {
     public Map<String, byte[]> compile(
             Iterable<? extends JavaFileObject> compUnits,
             Writer err, String sourcePath, String classPath) {
-        // create a new memory JavaFileManager
+        // create a new memory JavaFileManager 
         MemoryJavaFileManager manager = new MemoryJavaFileManager(stdManager, includeDirs);
         return compile(manager, compUnits, err, sourcePath, classPath);
     }
@@ -244,7 +242,7 @@ public class Compiler {
         Verifier btraceVerifier = new Verifier(unsafe);
         task.setTaskListener(btraceVerifier);
 
-        // we add BTrace Verifier as a (JSR 269) Processor
+        // we add BTrace Verifier as a (JSR 269) Processor 
         List<Processor> processors = new ArrayList<Processor>(1);
         processors.add(btraceVerifier);
         task.setProcessors(processors);
@@ -266,47 +264,18 @@ public class Compiler {
         }
 
         // collect .class bytes of all compiled classes
-        try {
-            Map<String, byte[]> classBytes = manager.getClassBytes();
-            List<String> classNames = btraceVerifier.getClassNames();
-            Map<String, byte[]> result = new HashMap<String, byte[]>();
-            for (String name : classNames) {
-                if (classBytes.containsKey(name)) {
-                    dump(name + "_before", classBytes.get(name));
-                    ClassReader cr = new ClassReader(classBytes.get(name));
-                    ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
-                    cr.accept(new Postprocessor(cw), ClassReader.EXPAND_FRAMES + ClassReader.SKIP_DEBUG);
-                    result.put(name, cw.toByteArray());
-                    dump(name + "_after", cw.toByteArray());
-                }
-            }
-            return result;
-        } finally {
-            try {
-                manager.close();
-            } catch (IOException exp) {
+        Map<String, byte[]> classBytes = manager.getClassBytes();
+        List<String> classNames = btraceVerifier.getClassNames();
+        Map<String, byte[]> result = new HashMap<String, byte[]>();
+        for (String name : classNames) {
+            if (classBytes.containsKey(name)) {
+                result.put(name, classBytes.get(name));
             }
         }
-    }
-
-    private void dump(String name, byte[] code) {
-//        OutputStream os = null;
-//        try {
-//            name = name.replace(".", "/") + ".class";
-//            File f = new File("/tmp/" + name);
-//            if (!f.exists()) {
-//                f.getParentFile().createNewFile();
-//            }
-//            os = new FileOutputStream(f);
-//            os.write(code);
-//        } catch (IOException e) {
-//
-//        } finally {
-//            if (os != null) {
-//                try {
-//                    os.close();
-//                } catch (IOException e) {}
-//            }
-//        }
+        try {
+            manager.close();
+        } catch (IOException exp) {
+        }
+        return result;
     }
 }

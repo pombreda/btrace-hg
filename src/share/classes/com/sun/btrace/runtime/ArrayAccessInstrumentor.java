@@ -43,9 +43,9 @@ import static com.sun.btrace.org.objectweb.asm.Opcodes.*;
  * @author A. Sundararajan
  */
 public class ArrayAccessInstrumentor extends MethodInstrumentor {
-    public ArrayAccessInstrumentor(MethodVisitor mv, String parentClz, String superClz,
+    public ArrayAccessInstrumentor(MethodVisitor mv, String parentName, String superClz, 
         int access, String name, String desc) {
-        super(mv, parentClz, superClz, access, name, desc);
+        super(mv, parentName, superClz, access, name, desc);
     }
 
     public void visitInsn(int opcode) {
@@ -104,7 +104,7 @@ public class ArrayAccessInstrumentor extends MethodInstrumentor {
                      String signature, String[] exceptions) {
                      MethodVisitor mv = super.visitMethod(access, name, desc, 
                              signature, exceptions);
-                     return new ArrayAccessInstrumentor(mv, args[0], args[0], access, name, desc) {
+                     return new ArrayAccessInstrumentor(mv, args[0], null, access, name, desc) {
 
                     @Override
                     protected void onAfterArrayLoad(int opcode) {

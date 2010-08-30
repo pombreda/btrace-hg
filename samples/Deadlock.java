@@ -26,7 +26,7 @@
 package com.sun.btrace.samples;
 
 import com.sun.btrace.annotations.*;
-import static com.sun.btrace.BTraceUtils.Threads.*;
+import static com.sun.btrace.BTraceUtils.*;
 
 /**
  * This BTrace program demonstrates deadlocks
